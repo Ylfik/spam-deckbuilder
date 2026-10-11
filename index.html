@@ -375,7 +375,20 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 0; pointer-event
 .boardzone { background: rgba(20, 16, 30, .72) !important; }
 .rail { background: rgba(16, 13, 24, .82); }
 select, input[type=search], textarea { background: rgba(10, 8, 16, .7) !important; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* transitions entre onglets : le panneau arrive en fondu, ses blocs montent l'un après l'autre */
+@keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+main.enter > .ph { animation: panelIn .32s cubic-bezier(.2, .7, .2, 1) both; }
+main.enter > .deck-grid > *, main.enter > .sec, main.enter > section, main.enter > .deck-grid > .two > .col > * { animation: panelIn .38s cubic-bezier(.2, .7, .2, 1) both; }
+main.enter > .deck-grid > *:nth-child(2), main.enter > section:nth-of-type(2) { animation-delay: .05s; }
+main.enter > .deck-grid > *:nth-child(3), main.enter > section:nth-of-type(3) { animation-delay: .09s; }
+main.enter > .deck-grid > *:nth-child(n+4) { animation-delay: .13s; }
+.tabs button { transition: background .2s, color .2s, box-shadow .2s; }
+.tabs button::before { transition: background .2s, transform .25s; }
+.tabs button[aria-selected="true"]::before { transform: scale(1.25); }
+.btn, .seg button { transition: background .15s, border-color .15s, color .15s, transform .1s; }
+.btn:active { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
 <div class="wrap">
@@ -3201,7 +3214,9 @@ function renderFx() {
 const TABS = ['deck', 'find', 'coll', 'meta', 'tier', 'fx'];
 function showTab(which) {
   if (!TABS.includes(which)) which = 'deck';
+  const prev = TABS.find((t) => !document.getElementById('p-' + t).hidden);
   TABS.forEach((t) => { document.getElementById('p-' + t).hidden = which !== t; document.getElementById('tab-' + t).setAttribute('aria-selected', which === t); });
+  if (prev !== which) { const m = document.getElementById('p-' + which); m.classList.remove('enter'); void m.offsetWidth; m.classList.add('enter'); clearTimeout(m._enterT); m._enterT = setTimeout(() => m.classList.remove('enter'), 700); }
   if (which === 'deck' && deckDirty) renderDeck();
   if (which === 'coll' && collDirty) { collDirty = false; renderColl(); }
   if (which === 'fx') { if (!document.getElementById('fx-cat').options.length) fxInit(); else renderFx(); }
@@ -3209,7 +3224,7 @@ function showTab(which) {
   if (which === 'meta') { renderMeta(); vsIntro(); }
   if (which === 'find') renderOptScope();
   try { localStorage.setItem('spam-atelier-tab', which); } catch (e) {}
-  window.scrollTo({ top: 0 });
+  if (prev !== which) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 document.getElementById('tab-deck').addEventListener('click', () => showTab('deck'));
 document.getElementById('tab-coll').addEventListener('click', () => showTab('coll'));
