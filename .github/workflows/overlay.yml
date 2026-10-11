@@ -1,0 +1,37 @@
+# Compile l'overlay Windows (Overlay-SPAM.exe) et le publie dans les Releases du dépôt.
+name: Overlay Windows
+on:
+  push:
+    branches: [main]
+    paths: ['overlay/**', '.github/workflows/overlay.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: overlay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: overlay/package-lock.json
+      - run: npm ci
+      - run: npx electron-builder --win portable --x64 --publish never
+      - name: Version
+        id: v
+        shell: bash
+        run: echo "tag=overlay-v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: Overlay SPAM ${{ steps.v.outputs.tag }}
+          make_latest: true
+          files: overlay/dist/Overlay-SPAM.exe
+          body: |
+            Overlay transparent pour SPAM (Windows). Télécharge **Overlay-SPAM.exe** et lance-le : pas d'installation.
+            Ctrl+Maj+D : déplacer / cliquer dans l'overlay · Ctrl+Maj+S : masquer / afficher.

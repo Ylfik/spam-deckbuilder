@@ -1,0 +1,25 @@
+{
+  "name": "spam-overlay",
+  "productName": "Overlay SPAM",
+  "version": "0.1.0",
+  "description": "Calque transparent pour SPAM : cartes des deux joueurs, cible principale, statistiques de boutique.",
+  "main": "main.js",
+  "author": "Ylfik",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "io.github.ylfik.spamoverlay",
+    "productName": "Overlay SPAM",
+    "artifactName": "Overlay-SPAM.exe",
+    "files": ["main.js", "preload.js", "src/**", "core/**", "ui/**", "package.json"],
+    "win": { "target": "portable", "icon": "icon.ico" },
+    "portable": { "artifactName": "Overlay-SPAM.exe" }
+  }
+}

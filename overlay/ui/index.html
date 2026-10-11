@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Overlay SPAM</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="panel">
+  <header id="drag">
+    <span class="logo"></span>
+    <div class="who"><b id="opp-name">En attente d’une partie</b><small id="opp-sub">Lance une partie classée ou casual</small></div>
+    <div class="tools edit-only">
+      <button id="b-site" title="Ouvrir l’Atelier SPAM">↗</button>
+      <button id="b-lock" title="Verrouiller (Ctrl+Maj+D)">🔒</button>
+      <button id="b-hide" title="Masquer (Ctrl+Maj+S)">✕</button>
+    </div>
+  </header>
+
+  <section id="s-win" class="win hidden">
+    <div class="bar"><i id="win-fill"></i></div>
+    <div class="win-txt"><b id="win-pct">–</b><span id="win-sub"></span></div>
+  </section>
+
+  <section id="s-target" class="target hidden">
+    <div class="lbl">Cible principale</div>
+    <div class="tcard">
+      <img id="t-img" alt="">
+      <div><b id="t-name"></b><small id="t-why"></small></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="lbl">Adversaire <small>ordre de focus</small></div>
+    <ol id="opp-list" class="list"></ol>
+    <p id="opp-hint" class="hint hidden">Survole en jeu les cartes adverses encore inconnues : l’overlay les reconnaît.</p>
+  </section>
+
+  <section>
+    <div class="lbl">Mes cartes <small>à protéger</small></div>
+    <ol id="mine-list" class="list"></ol>
+  </section>
+
+  <details id="s-stats">
+    <summary><span class="lbl">Boutique &amp; chance</span><small id="st-sum"></small></summary>
+    <table id="shop-table"></table>
+    <p id="crit-line" class="hint"></p>
+  </details>
+
+  <section class="edit-only fix">
+    <div class="lbl">Corriger les cartes adverses</div>
+    <div class="fix-row"><input list="all" id="fx0"><input list="all" id="fx1"></div>
+    <div class="fix-row"><input list="all" id="fx2"><input list="all" id="fx3"></div>
+    <datalist id="all"></datalist>
+    <button id="b-fix">Appliquer</button>
+    <button id="b-dir" class="ghost">Dossier du jeu…</button>
+  </section>
+
+  <footer><span id="status"></span><span class="keys">Ctrl+Maj+D déplacer · S masquer</span></footer>
+</div>
+<script src="ui.js"></script>
+</body>
+</html>
