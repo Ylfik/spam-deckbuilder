@@ -109,6 +109,11 @@ input[type=range] { accent-color: var(--teal); width: 110px; }
 .gc .body { position: absolute; inset: 0; width: 100%; height: 100%; }
 .gc .hdr { position: absolute; left: 0; top: 0; width: 100%; height: 24.35cqw; background: linear-gradient(rgba(6,3,16,.85), rgba(6,3,16,0)); }
 .gc .nm { position: absolute; left: 15.6cqw; top: 4.16cqw; width: 68.78cqw; font-family: var(--card); font-size: 4.58cqw; line-height: 1.05; color: #fff; text-transform: uppercase; text-align: center; text-shadow: 0 .52cqw 1.04cqw rgba(4,2,12,.95); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gc .tdots { position: absolute; left: 97.8cqw; top: 15.6cqw; transform: translateX(-50%); display: flex; flex-direction: column; gap: 2.5cqw; z-index: 3; }
+.gc .tdots i { display: block; width: 4.6cqw; height: 4.6cqw; border-radius: 50%; }
+.gc .tdots i.on { background: radial-gradient(circle at 35% 30%, #ff7be8, #e01cc8 55%, #a3008e); box-shadow: 0 0 0 .5cqw #1a0716, 0 0 2cqw rgba(255, 60, 220, .7); }
+.gc .tdots i.un { background: #3d3a40; box-shadow: 0 0 0 .5cqw #121014; }
+.gc .tdots i.no { visibility: hidden; }
 .gc .row { position: absolute; left: 3.95cqw; width: 92.09cqw; height: 14.67cqw; }
 .gc .row .bar { position: absolute; inset: 0; width: 100%; height: 100%; filter: brightness(0); opacity: .3; }
 .gc .row .ico { position: absolute; left: 3cqw; top: 50%; transform: translateY(-50%); display: flex; }
@@ -2050,6 +2055,12 @@ function rowsOf(card, talentSlot) {
   if (t && t.g) rows.push({ kind: 'sk', name: passiveName(t), rarity: RAR_SFX[(t.g.match(/_([CREL])$/) || [])[1]] || 'common', tip: t.e, granted: true });
   return rows;
 }
+// points de talent sous le coût, comme en jeu : violet = talent équipé, gris = débloqué (doublon) mais pas équipé, rien = pas débloqué
+function talentDots(card, o) {
+  const eq = o.talent || 0; const un = o.mine ? unlocked(card.id) : [];
+  const dots = card.ta.map((t) => (t.s === eq ? `<i class="on" title="Talent équipé : ${esc(t.n)}"></i>` : un.includes(t.s) ? `<i class="un" title="Talent débloqué : ${esc(t.n)}"></i>` : '<i class="no"></i>'));
+  return eq || un.length ? `<span class="tdots" aria-label="Talents">${dots.join('')}</span>` : '';
+}
 function cardHTML(card, o = {}) {
   const rows = rowsOf(card, o.talent || 0);
   const shown = rows.slice(0, 3);
@@ -2080,6 +2091,7 @@ function cardHTML(card, o = {}) {
     <img class="orb" src="${assetEl(card.el)}" alt="${esc(ELN[card.el])}">
     <img class="spm" src="${IM(`img/frame/spamton.webp`)}" alt=""><span class="spt" aria-label="${card.sp} Spamton par tour">${card.sp}</span>
     <img class="gem" src="${IM(`img/frame/rarity-${card.r}.webp`)}" alt="${esc(RN[card.r])}">
+    ${talentDots(card, o)}
   </div>`;
 }
 const PRESSURE_LABEL = { 0: 'aucun', 0.78: 'moyen', 1: 'fort', 1.6: 'très fort' };
@@ -2089,7 +2101,7 @@ const credit = (c) => c.ar && c.ar.name ? `<div class="credit">Illustration : ${
 function openDetail(id, talent) {
   const c = byId[id]; const P = E.profile(c, talent || 0);
   const box = document.getElementById('ov-box');
-  box.innerHTML = `<div><div class="gcw">${cardHTML(c, { talent })}</div>${credit(c)}</div>
+  box.innerHTML = `<div><div class="gcw">${cardHTML(c, { talent, mine: true })}</div>${credit(c)}</div>
   <div>
     <button class="btn sm close" id="ov-close">Fermer</button>
     <h3 id="ov-title">${esc(c.n)}</h3>
@@ -2129,7 +2141,7 @@ function renderSlots(dc, sim) {
     const best = E.bestTalent(dc, i, talentsOf, opts());
     const t = c.ta.find((x) => x.s === d.talent);
     h += `<div class="slot">
-      <button class="gc-btn gcw" data-detail="${c.id}" data-t="${d.talent}" aria-label="Voir le détail de ${esc(c.n)}">${cardHTML(c, { talent: d.talent })}</button>
+      <button class="gc-btn gcw" data-detail="${c.id}" data-t="${d.talent}" aria-label="Voir le détail de ${esc(c.n)}">${cardHTML(c, { talent: d.talent, mine: true })}</button>
       <div class="under">
         <select id="ta-${i}" data-i="${i}" aria-label="Talent de ${esc(c.n)}">${allowed.map((s) => `<option value="${s}" ${s === d.talent ? 'selected' : ''}>${esc(talentLabel(c, s))}${best && best.slot === s && allowed.length > 1 ? ' ★' : ''}</option>`).join('')}</select>
         <div class="tdesc">${t ? esc(t.e) : (allowed.length > 1 ? '' : (useColl() ? 'Aucun talent débloqué pour cette carte.' : ''))}</div>
@@ -2672,7 +2684,7 @@ function tileHTML(c, inDeck, st, key, rank) {
     const tn = st && st.t ? c.ta.find((x) => x.s === st.t) : null;
     const badge = st ? `<div class="stat-b"><span><span class="rk">${rank + 1}</span> · ${esc(STAT_UNIT[key])}${tn ? ' · ' + esc(tn.n) : ''}</span><b>${fmtStat(st.v)}</b></div>` : '';
     return `<div class="tile" data-tile="${c.id}" data-rank="${rank}">${badge}
-      <button class="gc-btn gcw" data-detail="${c.id}" aria-label="Voir le détail de ${esc(c.n)}">${cardHTML(c, { dim: !own })}</button>
+      <button class="gc-btn gcw" data-detail="${c.id}" aria-label="Voir le détail de ${esc(c.n)}">${cardHTML(c, { dim: !own, mine: true })}</button>
       <div class="own">
         <label class="tog"><input type="checkbox" data-own="${c.id}" ${own ? 'checked' : ''}> Possédée</label>
         <button class="btn sm" data-add="${c.id}" ${inDeck.has(c.id) || S.deck.length >= 4 ? 'disabled' : ''}>${inDeck.has(c.id) ? 'Dans le deck' : 'Au deck'}</button>
