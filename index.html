@@ -2275,23 +2275,39 @@ function renderSynergies(dc) {
 }
 
 function miniCard(c, t) { return `<div class="mini">${cardHTML(c, { talent: t })}</div>`; }
+let suggToken = 0;
 function renderSuggest(dc) {
-  const ul = document.getElementById('sugg');
+  const ul = document.getElementById('sugg'); const token = ++suggToken;
   document.getElementById('sugg-h').textContent = useColl() ? 'Cartes à ajouter (ma collection)' : 'Cartes à ajouter';
   if (S.deck.length >= 4) { ul.innerHTML = '<li class="empty" style="display:block;background:none;border:0;padding:0">Le deck est complet. Retire une carte pour voir ce qui la remplacerait le mieux.</li>'; return; }
-  const list = E.suggest(dc, pool(), talentsOf, opts()).slice(0, 8);
-  if (!list.length) { ul.innerHTML = '<li class="empty" style="display:block;background:none;border:0;padding:0">Aucune autre carte dans ta collection.</li>'; return; }
-  ul.innerHTML = list.map((s) => {
-    const c = s.card;
-    const why = s.links.sort((a, b) => b.s - a.s).slice(0, 2).map((l) => (l.from === c ? `apporte à ${l.to.n} : ${l.t}` : `profite de ${l.from.n} : ${l.t}`));
-    return `<li>
+  const all = E.suggest(dc, pool(), talentsOf, opts());
+  if (!all.length) { ul.innerHTML = '<li class="empty" style="display:block;background:none;border:0;padding:0">Aucune autre carte dans ta collection.</li>'; return; }
+  const draw = (list, note) => {
+    ul.innerHTML = (note ? `<li class="empty" style="display:block;background:none;border:0;padding:0;font-size:.78rem">${note}</li>` : '') + list.map((s) => {
+      const c = s.card;
+      const why = s.links.slice().sort((a, b) => b.s - a.s).slice(0, 2).map((l) => (l.from === c ? `apporte à ${l.to.n} : ${l.t}` : `profite de ${l.from.n} : ${l.t}`));
+      const side = s.wr !== undefined ? `<span class="gain" style="color:${wrColor(s.wr)}">${Math.round(s.wr * 100)} %<small>vs méta</small></span>` : `<span class="gain">${sgn(s.gain, 0)}<small>valeur</small></span>`;
+      return `<li>
       <button class="gc-btn" data-detail="${c.id}" data-t="${s.talent}" aria-label="Voir ${esc(c.n)}">${miniCard(c, s.talent)}</button>
-      <div style="min-width:0"><div class="t1">${esc(c.n)}</div><div class="t2">${esc(talentLabel(c, s.talent))} · ${sgn(s.dDmg, 0)} dégâts, ${sgn(s.dHeal, 0)} soins / tour</div>
+      <div style="min-width:0"><div class="t1">${esc(c.n)}</div><div class="t2">${esc(talentLabel(c, s.talent))}${s.wr !== undefined ? ` · synergie ${Math.round(100 * s.syn)}/100` : ` · ${sgn(s.dDmg, 0)} dégâts, ${sgn(s.dHeal, 0)} soins / tour`}</div>
         ${why.length ? `<ul class="why">${why.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}</div>
-      <div class="side"><span class="gain">${sgn(s.gain, 0)}<small>valeur</small></span><button class="btn sm" data-add="${c.id}" data-t="${s.talent}">Ajouter</button></div></li>`;
-  }).join('');
-  ul.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => addCard(b.dataset.add, +b.dataset.t)));
-  ul.querySelectorAll('[data-detail]').forEach((b) => b.addEventListener('click', () => openDetail(b.dataset.detail, +b.dataset.t)));
+      <div class="side">${side}<button class="btn sm" data-add="${c.id}" data-t="${s.talent}">Ajouter</button></div></li>`;
+    }).join('');
+    ul.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => addCard(b.dataset.add, +b.dataset.t)));
+    ul.querySelectorAll('[data-detail]').forEach((b) => b.addEventListener('click', () => openDetail(b.dataset.detail, +b.dataset.t)));
+  };
+  if (S.deck.length !== 3) { draw(all.slice(0, 8), 'Estimation rapide (production contre un adversaire fixe). Avec 3 cartes dans le deck, chaque 4e carte possible est testée en vrais duels contre la méta.'); return; }
+  draw(all.slice(0, 8), 'Estimation rapide… les duels contre la méta tournent pour classer toutes les cartes possibles.');
+  // 3 cartes : chaque 4e carte possible jouée en duels contre la méta (même score que « Trouver un deck » : 75 % victoires + 25 % synergie)
+  const base = dc.map((d) => ({ id: d.card.id, t: d.talent }));
+  const G = 6; const jobs = []; const own = [];
+  all.forEach((x, i) => META.decks.forEach((m, j) => { jobs.push({ a: [...base, { id: x.card.id, t: x.talent }], b: m.cards.map((c) => ({ id: c.id, t: c.t })), g: G, j }); own.push(i); }));
+  optRun(jobs, () => {}, () => token !== suggToken).then((out) => {
+    if (!out || token !== suggToken) return;
+    const agg = all.map(() => ({ n: 0, w: 0 })); out.forEach((st, k) => { agg[own[k]].n += st.n; agg[own[k]].w += st.w; });
+    const ranked = all.map((x, i) => { const dk = [...dc, { card: x.card, talent: x.talent }]; const wr = agg[i].w / Math.max(1, agg[i].n); const syn = synergyOf(dk).n; return { ...x, wr, syn, fit: 0.75 * wr + 0.25 * syn }; }).sort((a, b) => b.fit - a.fit);
+    draw(ranked.slice(0, 8), `Classées en vrais duels contre la méta (${G * META.decks.length} parties par carte, ± ${Math.round(100 / Math.sqrt(G * META.decks.length))} points), synergie comprise, parmi ${all.length} cartes possibles.`);
+  });
 }
 
 // ---- Recherche du meilleur deck : duels contre la méta, selon un style de jeu et une précision choisis.
