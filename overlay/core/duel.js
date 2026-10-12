@@ -1,6 +1,8 @@
 // SPAM — duels deck contre deck et méta
 (function (root) {
   const E = root.SpamEngine;
+  // hypothèse à tester : l'Éternité appliquée reste sur la carte (+1 à toutes ses recharges), au lieu de +1 une seule fois
+  const ETERNITE_PERM = typeof process !== 'undefined' && process.env && process.env.ETERNITE_PERM === '1';
   const { avg, costOf, usesOf, targetOf, buffScope, onCrit, hits, nOptions, dualOf } = E._int;
   const ELS = E.ELS;
   const ALL_EL = [...ELS, 'divine'];
@@ -346,14 +348,19 @@
           else if (eff === 'AddAllPlayerHPMax') aliveOf(team).forEach((o) => { o.hpMax += pv; o.hp += pv; });
           else if (eff === 'AddOppHPMax' && breaks) st.forEach((o, k) => { const x = v * breakW[k]; o.hpMax += x; o.hp += x; });
           else if (eff === 'AddCardResistance') s.resAll += pv / 6;
+          else if (eff === 'AddOppCardResistance' && v < 0) { // baisse de résistance d'un élément sur la carte adverse touchée (cumulable)
+            const o = firstTarget || aiTarget(foe, s.card.el, true); if (o && !o.immune && el) o.res[el] = (o.res[el] || 0) + pv;
+          }
           else if (eff === 'AddOppCardResistance' && v > 0) {
-            if (allyTarget) allyTarget.resAll += pv / 6;
+            // compétence sans soin ni attaque (ex. Voile solide de la Sorcière) : la résistance va au lanceur, cumulable jusqu'au plafond de 50 %
+            if (!ab.ac.some((x) => /^heal|damage|Damage/.test(x[0]))) { if (el) s.res[el] = (s.res[el] || 0) + pv; else s.resAll += pv / 6; }
+            else if (allyTarget) allyTarget.resAll += pv / 6;
             else if (scope === 'team') aliveOf(team).forEach((o) => (o.resAll += pv / 6)); else { const c = carry(); if (c) c.resAll += pv / 6; }
           }
           else if (eff === 'AddCooldown') {
             if (v > 0) { // Éternité sur l'adversaire
               const tgs = tgt === 'allEnemies' || /toutes les cartes adverses/.test(ab.e) ? aliveOf(foe) : [firstTarget || aiTarget(foe, s.card.el, true)];
-              tgs.forEach((o) => { if (o && !o.immune && !/Éternisé/.test(o.tn)) o.cd = o.cd.map((c) => c + eF * condF); });
+              tgs.forEach((o) => { if (o && !o.immune && !/Éternisé/.test(o.tn)) { o.cd = o.cd.map((c) => c + eF * condF); if (ETERNITE_PERM) o.eternal = Math.min(1, (o.eternal || 0) + eF * condF); } }); // ETERNITE_PERM : hypothèse « Éternité reste sur la carte »
             } else { // Temporalité : -n tours sur les recharges en cours de la cible (ou de toutes les alliées), une fois
               const tgs = tgt === 'allAllies' || /toutes les cartes alli/i.test(ab.e) ? aliveOf(team) : [carry()].filter(Boolean);
               const n = Math.abs(v) * eF; tgs.forEach((o) => { o.cd = o.cd.map((x) => x - n); });
@@ -375,7 +382,7 @@
           }
         }
         if (s.has(/^Taunt/) && hits(ab)) { s.taunt = 1; s.tauntTurns = Math.max(s.tauntTurns, 1); }
-        const cdBase = Math.max(1, ab.cd - s.temporality);
+        const cdBase = Math.max(1, ab.cd - s.temporality + (s.eternal || 0) + (ETERNITE_PERM && s.has(/^Eternity/) ? 1 : 0));
         if (rng) s.cd[i] = rng() < s.echo[i] / 100 ? 0 : cdBase; // Écho : la compétence reste disponible
         else s.cd[i] = cdBase * (1 - Math.min(90, s.echo[i]) / 100);
       });
