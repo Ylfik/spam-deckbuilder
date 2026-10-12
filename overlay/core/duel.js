@@ -414,7 +414,7 @@
   const RARITY_TABLE = [[3, 1, 0, 0, 0], [5, 0.8, 0.2, 0, 0], [7, 0.53, 0.40, 0.07, 0], [9, 0.25, 0.44, 0.31, 0], [11, 0.25, 0.36, 0.39, 0], [13, 0.12, 0.30, 0.58, 0], [15, 0, 0.39, 0.58, 0.03], [99, 0, 0.19, 0.62, 0.19]];
   function rarityOdds(luck, flat) {
     if (flat) return { common: 0.25, rare: 0.25, epic: 0.25, legendary: 0.25 };
-    const row = RARITY_TABLE.find((r) => luck <= r[0]);
+    const row = RARITY_TABLE.find((r) => luck <= r[0]) || RARITY_TABLE[RARITY_TABLE.length - 1]; // chance très haute ou inconnue : dernière ligne
     return { common: row[1], rare: row[2], epic: row[3], legendary: row[4] };
   }
   // Valeur d'un Tox posé sur une carte (unité : dégâts/soins attendus sur ~8 tours)
