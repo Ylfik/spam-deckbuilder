@@ -68,3 +68,13 @@ footer { display: flex; justify-content: space-between; gap: 8px; color: var(--m
 footer .keys { opacity: .7; } body.edit footer .keys { opacity: 1; color: var(--gold); }
 .spin { display: inline-block; width: 9px; height: 9px; border: 2px solid var(--mut); border-top-color: transparent; border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes s { to { transform: rotate(360deg); } }
+
+.shop { border-top: none; }
+.slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.slist li { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 0 8px; padding: 5px 8px; border-radius: 9px; background: rgba(255,255,255,.05); }
+.slist .nm { font-weight: 600; } .slist .nm small { color: var(--mut); font-weight: 400; margin-left: 4px; }
+.slist .pr { color: var(--gold); font-variant-numeric: tabular-nums; }
+.slist .tip { grid-column: 1 / -1; color: var(--mut); font-size: 12px; }
+.slist b.pos { color: var(--good); } .slist b.neu { color: var(--mut); }
+.verdict { margin: 7px 0 0; padding: 7px 9px; border-radius: 10px; background: linear-gradient(90deg, rgba(110,231,168,.16), rgba(110,231,168,.03)); border: 1px solid rgba(110,231,168,.35); font-size: 12.5px; }
+footer #vis { opacity: .8; }

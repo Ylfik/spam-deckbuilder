@@ -11,7 +11,7 @@ globalThis.__SPAM_CARDS = D.cards;
 const byId = Object.fromEntries(D.cards.map((c) => [c.id, c]));
 const ELS = ['fire', 'water', 'earth', 'nature', 'light', 'shadow'];
 
-const deckOf = (spec) => spec.filter((x) => byId[x.id]).map((x) => ({ card: byId[x.id], talent: x.t || 0 }));
+const deckOf = (spec) => spec.filter((x) => byId[x.id]).map((x) => ({ card: byId[x.id], talent: x.t || 0, tox: x.tox || [] }));
 
 // éléments de mes dégâts (pondérés) -> PV effectifs d'une carte adverse face à moi
 function myDamageMix(mine) {
@@ -77,13 +77,38 @@ function analyse(mineSpec, oppSpec, n = 160) {
   return out;
 }
 
-module.exports = { analyse, byId };
+// Conseil d'achat : chaque Tox proposé est essayé sur chacune de mes cartes vivantes, en duels contre le deck adverse.
+// offers : [idTox|null] ; alive : [bool] par carte de mon deck. Renvoie les options classées par victoires gagnées.
+function shopAdvice(mineSpec, oppSpec, offers, alive, n = 100) {
+  const mine = deckOf(mineSpec); let opp = deckOf(oppSpec);
+  if (!mine.length) return { options: [], base: null };
+  if (!opp.length) opp = mine; // adversaire inconnu : on teste contre un miroir
+  const base = series(mine, opp, n);
+  const options = [];
+  offers.forEach((tox, k) => {
+    if (!tox) return;
+    mine.forEach((d, i) => {
+      if (alive && alive[i] === false) return;
+      const dk = mine.map((x, j) => (j === i ? { ...x, tox: [...x.tox, tox] } : x));
+      const r = series(dk, opp, n);
+      options.push({ offer: k, tox, card: d.card.id, wr: r.wr, delta: r.wr - base.wr, dm: r.margin - base.margin });
+    });
+  });
+  options.sort((a, b) => b.delta - a.delta || b.dm - a.dm);
+  const perOffer = offers.map((tox, k) => options.find((o) => o.offer === k) || null);
+  return { base: base.wr, options, perOffer, oppKnown: oppSpec.length };
+}
+
+module.exports = { analyse, shopAdvice, byId };
 
 // utilisation en thread : reçoit {mine, opp, n, key}, renvoie {key, result}
 const { parentPort, isMainThread } = require('worker_threads');
 if (!isMainThread && parentPort) {
   parentPort.on('message', (m) => {
-    try { parentPort.postMessage({ key: m.key, result: analyse(m.mine, m.opp, m.n) }); }
+    try {
+      if (m.type === 'shop') parentPort.postMessage({ key: m.key, type: 'shop', result: shopAdvice(m.mine, m.opp, m.offers, m.alive, m.n) });
+      else parentPort.postMessage({ key: m.key, result: analyse(m.mine, m.opp, m.n) });
+    }
     catch (e) { parentPort.postMessage({ key: m.key, error: String(e && e.stack || e) }); }
   });
 }

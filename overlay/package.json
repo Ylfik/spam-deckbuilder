@@ -1,7 +1,7 @@
 {
   "name": "spam-overlay",
   "productName": "Overlay SPAM",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Calque transparent pour SPAM : cartes des deux joueurs, cible principale, statistiques de boutique.",
   "main": "main.js",
   "author": "Ylfik",
@@ -18,8 +18,33 @@
     "appId": "io.github.ylfik.spamoverlay",
     "productName": "Overlay SPAM",
     "artifactName": "Overlay-SPAM.exe",
-    "files": ["main.js", "preload.js", "src/**", "core/**", "ui/**", "package.json"],
-    "win": { "target": "portable", "icon": "icon.ico" },
-    "portable": { "artifactName": "Overlay-SPAM.exe" }
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**",
+      "core/**",
+      "ui/**",
+      "vision/**",
+      "package.json",
+      "!node_modules/@tesseract.js-data/*/4.0.0/**"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico"
+    },
+    "portable": {
+      "artifactName": "Overlay-SPAM.exe"
+    },
+    "asarUnpack": [
+      "node_modules/tesseract.js/**",
+      "node_modules/tesseract.js-core/**",
+      "node_modules/@tesseract.js-data/**"
+    ]
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/fra": "^1.0.0",
+    "tesseract.js": "^5.1.1",
+    "pngjs": "^7.0.0"
   }
 }
