@@ -277,6 +277,7 @@
           else if (rng) { let r = rng(), pick = null; for (const [o, x] of w) { pick = o; if ((r -= x) <= 0) break; } if (pick) applyOn(pick, 1, false); }
           else w.forEach((x, o) => applyOn(o, x, false));
         }
+        let lineCrit = null; // critique de la dernière ligne d'attaque (les effets « en cas de critique » qui la suivent en dépendent)
         for (const a of ab.ac) {
           const [eff] = a; const v = avg(a) / opt; let el = a[4]; const eF = roll(prec); const eHit = eF > 0; const pv = v * eF; // précision tirée pour chaque effet (règle confirmée)
           if (dual && (a === ab.ac[dual.d] || a === ab.ac[dual.h])) continue;
@@ -287,7 +288,8 @@
             if (eff === 'DamageCasterHP') base += 0.5 * (s.hpMax - s.hp);
             const raw0 = base * (1 + 0.1 * b) * mult;
             // en mode aléatoire, chaque coup sur chaque cible tire sa précision et son critique
-            const per = () => (rng ? (rng() < prec ? (rng() < cc ? cm : 1) : 0) : prec * critF);
+            lineCrit = false;
+            const per = () => { if (!rng) return prec * critF; if (rng() >= prec) return 0; if (rng() < cc) { lineCrit = true; return cm; } return 1; };
             const raw = raw0 * (rng ? 1 : prec * critF);
             const foes = aliveOf(foe); const mine = aliveOf(team);
             const R = () => (rng ? raw0 * per() : raw);
@@ -359,7 +361,8 @@
           else if (eff === 'AddCooldown') {
             if (v > 0) { // Éternité sur l'adversaire
               const tgs = tgt === 'allEnemies' || /toutes les cartes adverses/.test(ab.e) ? aliveOf(foe) : [firstTarget || aiTarget(foe, s.card.el, true)];
-              tgs.forEach((o) => { if (o && !o.immune && !/Éternisé/.test(o.tn)) { o.cd = o.cd.map((c) => c + eF * condF); if (ETERNITE_PERM) o.eternal = Math.min(1, (o.eternal || 0) + eF * condF); } }); // ETERNITE_PERM : hypothèse « Éternité reste sur la carte »
+              const cF = onCrit(ab) && rng && lineCrit !== null ? (lineCrit ? 1 : 0) : condF; // Sorcière : chaque attaque qui crit applique sa propre Éternité
+              tgs.forEach((o) => { if (o && !o.immune && !/Éternisé/.test(o.tn)) { o.cd = o.cd.map((c) => c + eF * cF); if (ETERNITE_PERM) o.eternal = Math.min(1, (o.eternal || 0) + eF * cF); } }); // ETERNITE_PERM : hypothèse « Éternité reste sur la carte »
             } else { // Temporalité : -n tours sur les recharges en cours de la cible (ou de toutes les alliées), une fois
               const tgs = tgt === 'allAllies' || /toutes les cartes alli/i.test(ab.e) ? aliveOf(team) : [carry()].filter(Boolean);
               const n = Math.abs(v) * eF; tgs.forEach((o) => { o.cd = o.cd.map((x) => x - n); });
