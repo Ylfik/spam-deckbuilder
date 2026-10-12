@@ -141,6 +141,8 @@
     if (target.has(/^Reflect/)) { attacker.hp -= 0.75 * d; if (attacker.hp <= 0 && attacker.alive) kill(team, foe, attacker, t, target); }
     const ls = attacker.has(/^Life Steal_E/) ? 0.75 : attacker.has(/^Life Steal_R/) ? 0.5 : attacker.has(/^Life Steal_C/) ? 0.25 : 0;
     if (ls) attacker.hp = Math.min(attacker.hpMax, attacker.hp + ls * d);
+    // Poison : chaque coup direct pose une charge (1 % des PV max au début de chacun des 3 tours suivants de la cible, charges cumulables)
+    if (!noSplash && attacker.has(/^Poison/) && !target.immune) (target.poison || (target.poison = [])).push(3);
     if (attacker.has(/^Erosion/) && !target.immune) { target.hpMax = Math.max(1, target.hpMax - 0.5 * d); target.hp = Math.min(target.hp, target.hpMax); }
     if (!noSplash && attacker.P.aoe > 0) { // AoE : les cartes voisines prennent une part des dégâts
       const al = foe.st; const k = al.indexOf(target);
@@ -192,6 +194,7 @@
     // début de tour
     st.forEach((s) => {
       if (!s.alive) return;
+      if (s.poison && s.poison.length) { const x = s.hpMax * 0.01 * s.poison.length; s.hp -= x; s.taken += x; s.poison = s.poison.map((k) => k - 1).filter((k) => k > 0); if (s.hp <= 0) { kill(team, foe, s, t, null); return; } }
       s.cd = s.cd.map((c) => c - 1);
       if (s.tauntTurns > 0) { s.tauntTurns--; if (s.tauntTurns <= 0) s.taunt = 0; }
       if (/^Focus$/.test(s.tn)) { s.taunt = 1 - (1 - s.taunt) * 0.75; s.tauntTurns = Math.max(s.tauntTurns, 1); }
