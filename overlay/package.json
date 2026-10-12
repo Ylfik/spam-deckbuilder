@@ -1,7 +1,7 @@
 {
   "name": "spam-overlay",
   "productName": "Overlay SPAM",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Calque transparent pour SPAM : cartes des deux joueurs, cible principale, statistiques de boutique.",
   "main": "main.js",
   "author": "Ylfik",

@@ -66,13 +66,14 @@ function hpFraction(img, x, row) {
 function analyseFrame(img, refs, shopRef) {
   const out = { scene: 'other', me: [], opp: [] };
   if (shopRef && dot(featRegion(img, 740, 105, 1180, 175, 32, 6), shopRef) > 0.85) { out.scene = 'shop'; return out; }
-  let seen = 0;
+  let seen = 0, bars = 0;
   for (const [row, yt] of [['me', CFG.Y_ME], ['opp', CFG.Y_OPP]]) for (const x of CFG.XS) {
-    const m = matchSlot(slotFeature(img, x, yt), refs);
-    if (m.id) seen++;
-    out[row].push({ ...m, hp: m.id ? hpFraction(img, x, row) : null });
+    const m = matchSlot(slotFeature(img, x, yt), refs); const hp = hpFraction(img, x, row);
+    if (m.id) seen++; if (hp > 0) bars++;
+    out[row].push({ ...m, hp: m.id || hp > 0 ? hp : null });
   }
-  if (seen >= 2) out.scene = 'board';
+  // plateau : au moins 2 cartes reconnues, ou des barres de PV à au moins 4 emplacements (illustrations inconnues)
+  if (seen >= 2 || bars >= 4) out.scene = 'board';
   return out;
 }
 
@@ -96,4 +97,6 @@ function cropForOcr(img, box, scale = 3, thr = 200, dark = false) { // dark : te
   }
   return { w: W, h: H, data };
 }
-module.exports = { CFG, featRegion, refFeature, slotFeature, matchSlot, hpFraction, analyseFrame, OCR_BOXES, cropForOcr, dot };
+// bandeau du nom en haut de la carte (lisible quelle que soit l'illustration : full art, alternative…)
+const nameBox = (row, x) => { const yt = row === 'me' ? CFG.Y_ME - 1 : CFG.Y_OPP - 1; return [x + 30, yt + 10, x + 197, yt + 27]; };
+module.exports = { nameBox, CFG, featRegion, refFeature, slotFeature, matchSlot, hpFraction, analyseFrame, OCR_BOXES, cropForOcr, dot };

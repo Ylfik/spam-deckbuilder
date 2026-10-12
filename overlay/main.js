@@ -20,7 +20,7 @@ const TOX = globalThis.SpamDuel.toxPool(CARDS.cards);
 
 // ---------- réglages et données gardées entre deux lancements ----------
 const STORE = () => path.join(app.getPath('userData'), 'overlay-data.json');
-let store = { settings: {}, lastDeck: null, decks: {}, games: [] };
+let store = { settings: {}, lastDeck: null, decks: {}, games: [], learned: {} };
 function loadStore() { try { store = { ...store, ...JSON.parse(fs.readFileSync(STORE(), 'utf8')) }; } catch (e) { /* premier lancement */ } }
 let saveT = null;
 function saveStore() { clearTimeout(saveT); saveT = setTimeout(() => { try { fs.writeFileSync(STORE(), JSON.stringify(store)); } catch (e) { /* disque plein ou verrouillé */ } }, 500); }
@@ -114,8 +114,9 @@ function tick() {
 
 // ---------- analyse dans un thread ----------
 let worker = null, lastKey = '', pending = null, pendingShop = null, busy = false, lastAnalysis = null, lastSpec = null, shopKey = '';
+let talentDeck = null; // deck enregistré qui correspond aux cartes vues à l'écran (pour leurs talents)
 function talentOf(id) {
-  const d = state && state.lastDeck; if (!d) return 0;
+  const d = talentDeck || (state && state.lastDeck); if (!d) return 0;
   const c = d.cards.find((x) => GUID[x.id] === id); return c ? c.talent || 0 : 0;
 }
 function publish() {
@@ -123,6 +124,7 @@ function publish() {
   // ce que l'écran montre passe avant le journal : mes 4 cartes, celles de l'adversaire, leurs PV, le tour
   if (vis.live) {
     const vm = vis.me.map((x) => x.id).filter(Boolean), vo = vis.opp.map((x) => x.id).filter(Boolean);
+    if (vm.length >= 3) talentDeck = Object.values(state.decks || {}).find((d) => { const ids = d.cards.map((c) => GUID[c.id]); return vm.every((id) => ids.includes(id)); }) || null;
     if (vm.length >= 3) { snap.mine = [...vm, ...snap.mine.filter((id) => !vm.includes(id))].slice(0, 4); snap.minePinned = vm; }
     if (vo.length) snap.opp = [...vo, ...snap.opp.filter((id) => !vo.includes(id))].slice(0, 4);
     snap.hpFrac = {}; [...vis.me, ...vis.opp].forEach((x) => { if (x.id && x.hp != null) snap.hpFrac[x.id] = x.hp; });
@@ -164,7 +166,7 @@ async function scanReplays(force) {
     for (const f of stats.listReplays(replayDir())) {
       const uid = path.basename(f, '.srpl');
       if (!force && have.has(uid)) continue;
-      try { const g = await stats.readOne(f, GUID); if (!have.has(g.uid)) { store.games.push(g); have.add(g.uid); added++; } if (!last || g.start > last.start) last = g; } catch (e) { /* replay illisible : ignoré */ }
+      try { const g = await stats.readOne(f, GUID); if (!have.has(g.uid)) { store.games.push(g); have.add(g.uid); added++; if (!force && Date.now() - Date.parse(g.start || 0) < 3 * 3600e3) learnFromReplay(g); } if (!last || g.start > last.start) last = g; } catch (e) { /* replay illisible : ignoré */ }
     }
     if (added) {
       store.games.sort((a, b) => (a.start < b.start ? -1 : 1));
@@ -186,11 +188,26 @@ async function scanReplays(force) {
 const vis = { live: false, scene: 'other', me: [], opp: [], turn: null, misses: 0 };
 const slotMem = { me: [{}, {}, {}, {}], opp: [{}, {}, {}, {}] }; // mémoire par emplacement (tolère un survol qui cache une carte)
 let refs = null, shopRef = null, visBusy = false, lastTurnRead = 0, lastShopRead = 0, shopOpenSince = 0, ocrReady = null;
+let baseRefs = null;
+const nrm = (a) => { const f = Float32Array.from(a); let q = 0; for (const v of f) q += v * v; q = Math.sqrt(q) || 1; return f.map((v) => v / q); };
 function loadRefs() {
   const R = JSON.parse(fs.readFileSync(path.join(__dirname, 'vision', 'refs.json'), 'utf8'));
-  const n = (a) => { const f = Float32Array.from(a); let q = 0; for (const v of f) q += v * v; q = Math.sqrt(q) || 1; return f.map((v) => v / q); };
-  refs = Object.entries(R.refs).map(([k, v]) => [k, n(v)]); shopRef = n(R.shopRef);
+  const drop = (process.env.SPAM_DROP_REFS || '').split(',').filter(Boolean); // test : simule des illustrations inconnues
+  baseRefs = Object.entries(R.refs).filter(([k]) => !drop.includes(k)).map(([k, v]) => [k, nrm(v)]); shopRef = nrm(R.shopRef);
+  rebuildRefs();
 }
+// illustrations apprises en jeu (full art, alternatives) : ajoutées aux références, gardées d'une session à l'autre
+function rebuildRefs() { refs = [...baseRefs, ...Object.entries(store.learned || {}).flatMap(([id, arr]) => arr.map((v) => [id, nrm(v)]))]; }
+function learn(id, feat) {
+  if (!id || !feat || !byId[id]) return;
+  const best = refs.filter(([k]) => k === id).reduce((b, [, v]) => Math.max(b, V.dot(v, feat)), -1);
+  if (best >= 0.95) return; // déjà reconnue telle quelle
+  const L = (store.learned = store.learned || {}); L[id] = [...(L[id] || []), Array.from(feat, (v) => Math.round(v * 1000))].slice(-4);
+  rebuildRefs(); saveStore(); send('learned', { id, n: byId[id].n });
+}
+const NAMES = CARDS.cards.map((c) => [c.id, c.n]);
+const slotFeat = { me: [null, null, null, null], opp: [null, null, null, null] }; // dernière empreinte des emplacements non reconnus
+const lastNameRead = {};
 async function grab() {
   if (process.env.SPAM_FAKE_SCREEN) { // test : une capture d'écran tient lieu d'écran (plusieurs fichiers séparés par des virgules, en boucle)
     const { PNG } = require('pngjs'); const list = process.env.SPAM_FAKE_SCREEN.split(','); grab.k = ((grab.k || 0) + 1);
@@ -204,12 +221,45 @@ async function grab() {
   const sz = src.thumbnail.getSize(); if (!sz.width) return null;
   return { w: sz.width, h: sz.height, data: src.thumbnail.toBitmap(), bgra: true };
 }
+let visMatch = null;
 function stable(row, k, m) {
+  if (state && state.id !== visMatch) { visMatch = state.id; for (const r of ['me', 'opp']) { slotMem[r] = [{}, {}, {}, {}]; slotFeat[r] = [null, null, null, null]; } }
   const mem = slotMem[row][k];
   if (m.id) { if (mem.cand === m.id) mem.n = (mem.n || 0) + 1; else { mem.cand = m.id; mem.n = 1; } if (mem.n >= 2 || mem.id === m.id) { mem.id = m.id; mem.miss = 0; } if (m.hp != null && mem.id === m.id) mem.hp = m.hp; }
   else if (mem.id && ++mem.miss > 6) { mem.id = null; mem.hp = null; } // emplacement vide depuis plusieurs secondes : carte morte
   return { id: mem.id || null, hp: mem.id ? (mem.hp ?? null) : null };
 }
+// carte présente mais pas reconnue par son illustration : on lit son nom ; si ça marche, on apprend l'illustration
+async function identifyUnknown(img, a) {
+  for (const row of ['me', 'opp']) for (let k = 0; k < 4; k++) {
+    const x = V.CFG.XS[k]; const present = V.hpFraction(img, x, row) > 0;
+    if (!present || vis[row][k].id) { slotFeat[row][k] = null; continue; }
+    slotFeat[row][k] = V.slotFeature(img, x, row === 'me' ? V.CFG.Y_ME : V.CFG.Y_OPP);
+    const key = row + k; if (Date.now() - (lastNameRead[key] || 0) < 4000) continue; lastNameRead[key] = Date.now();
+    ocrReady = ocrReady || OCR.init(path.join(app.getPath('userData'), 'ocr')); await ocrReady;
+    const taken = new Set(vis[row].map((s) => s.id).filter(Boolean));
+    let r = await OCR.readCardName(img, V.nameBox(row, x), NAMES.filter(([id]) => !taken.has(id)));
+    if (!r && row === 'me') r = await OCR.readAbilities(img, x, V.CFG.Y_ME - 1, CARDS.cards.filter((c) => !taken.has(c.id)));
+    if (r) { const mem = slotMem[row][k]; mem.id = r.id; mem.cand = r.id; mem.n = 2; mem.miss = 0; mem.hp = V.hpFraction(img, x, row); vis[row][k] = { id: r.id, hp: mem.hp }; learn(r.id, slotFeat[row][k]); slotFeat[row][k] = null; }
+  }
+  // dernier recours : une seule carte inconnue sur une rangée et une seule carte connue par le journal qui manque à l'écran
+  for (const row of ['me', 'opp']) {
+    const unk = [0, 1, 2, 3].filter((k) => slotFeat[row][k]); if (unk.length !== 1) continue;
+    const snap = state.snapshot(); const fromLog = (row === 'me' ? snap.minePinned : snap.opp) || [];
+    const missing = fromLog.filter((id) => !vis[row].some((s) => s.id === id)); if (missing.length !== 1) continue;
+    const k = unk[0], mem = slotMem[row][k]; mem.id = missing[0]; mem.cand = missing[0]; mem.n = 2; mem.miss = 0;
+    vis[row][k] = { id: missing[0], hp: V.hpFraction(img, V.CFG.XS[k], row) }; learn(missing[0], slotFeat[row][k]); slotFeat[row][k] = null;
+  }
+}
+// fin de partie : le replay donne les 8 cartes ; une illustration restée inconnue est apprise par élimination
+function learnFromReplay(g) {
+  for (const [row, list] of [['me', g.my || []], ['opp', g.opp || []]]) {
+    const unk = [0, 1, 2, 3].filter((k) => slotFeat[row][k]); if (unk.length !== 1) continue;
+    const missing = list.filter((id) => byId[id] && !vis[row].some((s) => s.id === id));
+    if (missing.length === 1) learn(missing[0], slotFeat[row][unk[0]]);
+  }
+}
+
 async function visionTick() {
   if (process.env.SPAM_DEBUG) console.log('tick', visBusy, !!store.settings.noVision, !!refs);
   if (visBusy || store.settings.noVision || !refs) return; visBusy = true;
@@ -219,6 +269,7 @@ async function visionTick() {
     if (a.scene === 'board') {
       vis.misses = 0; vis.scene = 'board'; vis.live = true;
       vis.me = a.me.map((m, k) => stable('me', k, m)); vis.opp = a.opp.map((m, k) => stable('opp', k, m));
+      await identifyUnknown(img, a);
       if (shopOpenSince) { shopOpenSince = 0; send('shop', null); }
       if (now - lastTurnRead > 3000) { lastTurnRead = now; ocrReady = ocrReady || OCR.init(path.join(app.getPath('userData'), 'ocr')); await ocrReady; const b = await OCR.readBoard(img); if (b.turn) vis.turn = b.turn; }
       publish();

@@ -76,5 +76,31 @@ function matchTox(offer, pool) {
   }
   return best && (best.nameSim >= 0.6 || best.s >= 0.55) ? best : null;
 }
+// nom d'une carte sur le plateau : plusieurs seuils, on garde la lecture la plus proche d'un nom connu
+async function readCardName(img, box, names) {
+  let best = null;
+  for (const [thr, dark] of [[200, false], [170, false], [90, true]]) {
+    const prev = fra && (await fra.setParameters({ tessedit_pageseg_mode: '7' }));
+    const t = await read(fra, img, box, 4, thr, dark);
+    for (const [id, n] of names) { const s = sim(t, n); if (!best || s > best.s) best = { id, s, text: t }; }
+    if (best && best.s >= 0.85) break;
+  }
+  await fra.setParameters({ tessedit_pageseg_mode: '6' });
+  return best && best.s >= 0.7 ? best : null;
+}
+// mes cartes montrent leurs compétences en gros : on reconnaît la carte à ses 2 noms de compétence
+async function readAbilities(img, x, yTop, cards) {
+  await fra.setParameters({ tessedit_pageseg_mode: '7' });
+  const lines = [];
+  for (const dy of [186, 221]) for (const thr of [170, 140]) { const t = await read(fra, img, [x + 45, yTop + dy, x + 185, yTop + dy + 17], 4, thr); if (t) lines.push(t); }
+  await fra.setParameters({ tessedit_pageseg_mode: '6' });
+  let best = null;
+  for (const c of cards) {
+    const ab = c.ab.map((a) => a.n); if (!ab.length) continue;
+    const sc = ab.map((n) => Math.max(0, ...lines.map((l) => sim(l, n)))); const v = sc.reduce((a, b) => a + b, 0) / sc.length;
+    if (!best || v > best.s) best = { id: c.id, s: v };
+  }
+  return best && best.s >= 0.72 ? best : null;
+}
 async function close() { if (fra) await fra.terminate(); if (num) await num.terminate(); fra = num = ready = null; }
-module.exports = { init, readBoard, readShop, matchTox, clean, sim, close };
+module.exports = { init, readBoard, readShop, readCardName, readAbilities, matchTox, clean, sim, close };
