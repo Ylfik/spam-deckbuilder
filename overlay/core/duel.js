@@ -352,9 +352,8 @@
             const o = firstTarget || aiTarget(foe, s.card.el, true); if (o && !o.immune && el) o.res[el] = (o.res[el] || 0) + pv;
           }
           else if (eff === 'AddOppCardResistance' && v > 0) {
-            // compétence sans soin ni attaque (ex. Voile solide de la Sorcière) : la résistance va au lanceur, cumulable jusqu'au plafond de 50 %
-            if (!ab.ac.some((x) => /^heal|damage|Damage/.test(x[0]))) { if (el) s.res[el] = (s.res[el] || 0) + pv; else s.resAll += pv / 6; }
-            else if (allyTarget) allyTarget.resAll += pv / 6;
+            // monocible (ex. Voile solide de la Sorcière) : sur une seule alliée au choix (la carte clé), cumulable jusqu'au plafond de 50 %
+            if (allyTarget) allyTarget.resAll += pv / 6;
             else if (scope === 'team') aliveOf(team).forEach((o) => (o.resAll += pv / 6)); else { const c = carry(); if (c) c.resAll += pv / 6; }
           }
           else if (eff === 'AddCooldown') {
